@@ -58,6 +58,9 @@ async def generate_response(
         
         if max_tokens:
             payload["options"]["num_predict"] = max_tokens
+        else:
+            # Límite por defecto: ~300 palabras ≈ 400 tokens (promedio 1.3 tokens/palabra)
+            payload["options"]["num_predict"] = 400
         
         # Realizar petición a Ollama
         logger.info(f"Enviando petición a Ollama (modelo: {model}, URL: {OLLAMA_URL}, timeout: {REQUEST_TIMEOUT}s)")
@@ -117,8 +120,11 @@ def build_rag_prompt(
         Prompt completo formateado
     """
     # Prompt del sistema más corto y directo
-    default_system = """Eres un asistente legal. Explica documentos legales de forma clara y sencilla.
-Evita jerga legal innecesaria. Si no tienes la información en el contexto, dilo claramente."""
+    default_system = """Eres un asistente legal especializado en explicar documentos legales de manera clara y natural.
+Tu objetivo es ayudar a los usuarios a entender información legal usando lenguaje cotidiano y conversacional.
+IMPORTANTE: Solo puedes usar información que esté explícitamente en los documentos proporcionados.
+NUNCA inventes, asumas o agregues información que no esté en el contexto.
+Si la información no está disponible en los documentos, di claramente que no tienes esa información."""
     
     system = system_prompt or default_system
     
@@ -140,8 +146,16 @@ Evita jerga legal innecesaria. Si no tienes la información en el contexto, dilo
     # Pregunta del usuario
     prompt_parts.append(f"Pregunta: {user_question}\n")
     
-    # Instrucción final (más corta)
-    prompt_parts.append("Responde basándote SOLO en el contexto. Usa lenguaje claro y sencillo.\nRespuesta:")
+    # Instrucción final con límite de palabras y énfasis en no inventar
+    prompt_parts.append("""IMPORTANTE - Sigue estas reglas estrictamente:
+1. Responde SOLO usando información que esté explícitamente en el contexto proporcionado arriba
+2. NUNCA inventes, asumas o agregues información que no esté en los documentos
+3. Si la respuesta no está en el contexto, di claramente: "No encontré esa información en los documentos proporcionados"
+4. Mantén tu respuesta natural y conversacional, como si estuvieras explicando a un amigo
+5. LIMITA tu respuesta a máximo 300 palabras
+6. Usa lenguaje claro y sencillo, evitando jerga legal innecesaria
+
+Respuesta:""")
     
     full_prompt = "\n".join(prompt_parts)
     
