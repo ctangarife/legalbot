@@ -35,6 +35,7 @@ dist/
 data/mongodb/
 data/qdrant/
 data/ollama/
+data/backend/uploads/*
 
 # Archivos estáticos del frontend (generados por build)
 data/static/

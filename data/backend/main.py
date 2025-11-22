@@ -109,7 +109,7 @@ async def root():
         "docs": "/docs"
     }
 
-@app.get("/api/health")
+@app.get("/health")
 async def health_check():
     """Verifica el estado de la API"""
     return {"status": "ok"}
@@ -314,7 +314,7 @@ async def process_document_after_upload(
         
         # Segmentar texto en chunks
         logger.info(f"Segmentando texto de {filename}...")
-        chunks = processor.segment_text(text)
+        chunks = processor.segment_text(text, filename=filename, file_type=file_type)
         chunks_count = len(chunks)
         
         if chunks_count == 0:
@@ -349,7 +349,6 @@ async def process_document_after_upload(
         logger.info(f"Almacenando {chunks_count} embeddings en Qdrant para {filename}...")
         chunk_ids = await store_embeddings(
             file_id=file_id,
-            filename=filename,
             chunks=chunks,
             embeddings=embeddings
         )
@@ -387,7 +386,7 @@ async def process_document_after_upload(
     return chunks_count
 
 
-@app.post("/api/upload", response_model=UploadResponse)
+@app.post("/upload", response_model=UploadResponse)
 async def upload_file(
     files: List[UploadFile] = File(...),
     description: Optional[str] = Form(None)
@@ -513,22 +512,26 @@ async def upload_file(
             detail=f"Error al subir archivo: {str(e)}"
         )
 
-@app.post("/api/upload/multiple", response_model=List[UploadResponse])
+@app.post("/upload/multiple", response_model=List[UploadResponse])
 async def upload_multiple_files(
     files: List[UploadFile] = File(...)
 ):
     """
     Endpoint para subir múltiples archivos a la vez.
+    Procesa los archivos secuencialmente para evitar sobrecargar el sistema.
     
     Args:
         files: Lista de archivos a subir
     
     Returns:
-        Lista con información de cada archivo subido
+        Lista con información de cada archivo subido (éxitos y fallos)
     """
+    total_files = len(files)
+    logger.info(f"Iniciando subida múltiple: {total_files} archivo(s)")
     results = []
     
-    for file in files:
+    for index, file in enumerate(files, 1):
+        logger.info(f"Procesando archivo {index}/{total_files}: {file.filename}")
         try:
             # Validar extensión
             file_ext = Path(file.filename).suffix.lower()
@@ -620,6 +623,7 @@ async def upload_multiple_files(
             ))
         
         except Exception as e:
+            logger.error(f"Error al procesar archivo {index}/{total_files} ({file.filename}): {e}", exc_info=True)
             results.append(UploadResponse(
                 success=False,
                 message=f"Error al procesar {file.filename}: {str(e)}",
@@ -627,10 +631,15 @@ async def upload_multiple_files(
                 filename=file.filename
             ))
     
+    # Resumen final
+    successful = sum(1 for r in results if r.success)
+    failed = total_files - successful
+    logger.info(f"Subida múltiple completada: {successful} exitoso(s), {failed} fallido(s) de {total_files} total")
+    
     return results
 
 
-@app.get("/api/documents", response_model=List[DocumentResponse])
+@app.get("/documents", response_model=List[DocumentResponse])
 async def list_documents():
     """
     Lista todos los documentos almacenados en MongoDB.
@@ -679,7 +688,7 @@ async def list_documents():
         )
 
 
-@app.get("/api/documents/{file_id}", response_model=DocumentResponse)
+@app.get("/documents/{file_id}", response_model=DocumentResponse)
 async def get_document(file_id: str):
     """
     Obtiene información de un documento específico.
@@ -731,7 +740,7 @@ async def get_document(file_id: str):
         )
 
 
-@app.post("/api/documents/{file_id}/process")
+@app.post("/documents/{file_id}/process")
 async def reprocess_document(file_id: str):
     """
     Reprocesa un documento: vuelve a extraer texto, segmentar y generar embeddings.
@@ -808,7 +817,7 @@ async def reprocess_document(file_id: str):
         )
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
     Endpoint principal para hacer preguntas sobre los documentos usando RAG.
@@ -844,7 +853,7 @@ async def chat(request: ChatRequest):
         if not is_available:
             raise HTTPException(
                 status_code=400,
-                detail=f"El modelo '{model}' no está disponible en Ollama. Usa GET /api/models para ver modelos disponibles."
+                detail=f"El modelo '{model}' no está disponible en Ollama. Usa GET /models para ver modelos disponibles."
             )
         
         # Generar embedding de la pregunta
@@ -926,7 +935,7 @@ async def chat(request: ChatRequest):
         )
 
 
-@app.get("/api/models")
+@app.get("/models")
 async def list_models():
     """
     Lista todos los modelos disponibles en Ollama.
@@ -949,7 +958,7 @@ async def list_models():
         )
 
 
-@app.get("/api/models/{model}/check")
+@app.get("/models/{model}/check")
 async def check_model(model: str):
     """
     Verifica si un modelo específico está disponible en Ollama.
