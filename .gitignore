@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+*.egg-info/
+
+# Docker volumes (datos locales)
+data/mongodb/
+data/qdrant/
+data/ollama/
+
+# Archivos estáticos del frontend (generados por build)
+data/static/
+
+# Logs
+*.log
+data/logs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
